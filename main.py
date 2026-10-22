@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,19 @@ def home():
 def list_transactions(db: Session = Depends(get_db)):
     transactions = db.scalars(select(Transaction)).all()
     return transactions
+
+@app.get("/transactions/{transaction_id}")
+def get_transaction(
+    transaction_id: int,
+    db: Session = Depends(get_db),
+):
+    transaction = db.get(Transaction, transaction_id)
+
+    if transaction is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    return transaction
+
 
 @app.post("/transactions")
 def create_transaction(
