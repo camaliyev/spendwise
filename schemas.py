@@ -9,4 +9,10 @@ class TransactionCreate(BaseModel):
     description: str | None = None
     transaction_date: date
 
-    
+
+class TransactionUpdate(BaseModel):
+    amount: Decimal | None = Field(default=None, gt=0)
+    category_id: int | None = None
+    description: str | None = None
+    transaction_date: date | None = None
+
