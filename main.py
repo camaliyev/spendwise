@@ -29,6 +29,21 @@ def get_transaction(
 
     return transaction
 
+@app.delete("/transactions/{transaction_id}")
+def delete_transaction(
+    transaction_id: int,
+    db: Session = Depends(get_db),
+):
+    transaction = db.get(Transaction, transaction_id)
+
+    if transaction is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    db.delete(transaction)
+    db.commit()
+
+    return {"message": "Transaction deleted successfully"}
+
 
 @app.post("/transactions")
 def create_transaction(
