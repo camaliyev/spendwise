@@ -3,8 +3,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Transaction
-from schemas import TransactionCreate, TransactionUpdate, TransactionRead
+from models import Category, Transaction
+from schemas import CategoryRead, TransactionCreate, TransactionRead, TransactionUpdate
+
 
 app = FastAPI(title="SpendWise API")
 
@@ -16,6 +17,11 @@ def home():
 def list_transactions(db: Session = Depends(get_db)):
     transactions = db.scalars(select(Transaction)).all()
     return transactions
+
+@app.get("/categories", response_model=list[CategoryRead])
+def list_categories(db: Session = Depends(get_db)):
+    categories = db.scalars(select(Category)).all()
+    return categories
 
 @app.get("/transactions/{transaction_id}", response_model=TransactionRead)
 def get_transaction(

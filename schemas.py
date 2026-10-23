@@ -27,3 +27,10 @@ class TransactionRead(BaseModel):
     description: str | None
     transaction_date: date
 
+class CategoryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    name: str
+    kind: str
