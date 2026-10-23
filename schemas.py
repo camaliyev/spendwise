@@ -34,3 +34,8 @@ class CategoryRead(BaseModel):
     user_id: int
     name: str
     kind: str
+
+class CategoryCreate(BaseModel):
+    user_id: int
+    name: str
+    kind: str
