@@ -1,6 +1,6 @@
 from datetime import date
 from decimal import Decimal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 class TransactionCreate(BaseModel):
     user_id: int
@@ -15,4 +15,15 @@ class TransactionUpdate(BaseModel):
     category_id: int | None = None
     description: str | None = None
     transaction_date: date | None = None
+
+
+class TransactionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    category_id: int
+    amount: Decimal
+    description: str | None
+    transaction_date: date
 

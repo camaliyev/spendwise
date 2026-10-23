@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Transaction
-from schemas import TransactionCreate, TransactionUpdate
+from schemas import TransactionCreate, TransactionUpdate, TransactionRead
 
 app = FastAPI(title="SpendWise API")
 
@@ -12,12 +12,12 @@ app = FastAPI(title="SpendWise API")
 def home():
     return {"message": "Welcome to the SpendWise API"}
 
-@app.get("/transactions")
+@app.get("/transactions", response_model=list[TransactionRead])
 def list_transactions(db: Session = Depends(get_db)):
     transactions = db.scalars(select(Transaction)).all()
     return transactions
 
-@app.get("/transactions/{transaction_id}")
+@app.get("/transactions/{transaction_id}", response_model=TransactionRead)
 def get_transaction(
     transaction_id: int,
     db: Session = Depends(get_db),
@@ -44,7 +44,7 @@ def delete_transaction(
 
     return {"message": "Transaction deleted successfully"}
 
-@app.patch("/transactions/{transaction_id}")
+@app.patch("/transactions/{transaction_id}", response_model=TransactionRead)
 def update_transaction(
     transaction_id: int,
     transaction_data: TransactionUpdate,
@@ -73,7 +73,7 @@ def update_transaction(
     return transaction
 
 
-@app.post("/transactions")
+@app.post("/transactions", response_model=TransactionRead)
 def create_transaction(
     transaction_data: TransactionCreate,
     db: Session = Depends(get_db)
