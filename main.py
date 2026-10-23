@@ -17,26 +17,6 @@ def list_transactions(db: Session = Depends(get_db)):
     transactions = db.scalars(select(Transaction)).all()
     return transactions
 
-@app.get("/categories", response_model=list[CategoryRead])
-def list_categories(db: Session = Depends(get_db)):
-    categories = db.scalars(select(Category)).all()
-    return categories
-
-@app.post("/categories", response_model=CategoryRead, status_code=201)
-def create_category(
-    category_data: CategoryCreate,
-    db: Session = Depends(get_db),
-):
-    new_category = Category(
-        user_id=category_data.user_id,
-        name=category_data.name,
-        kind=category_data.kind,
-    )
-    db.add(new_category)
-    db.commit()
-    db.refresh(new_category)
-    return new_category
-
 @app.get("/transactions/{transaction_id}", response_model=TransactionRead)
 def get_transaction(
     transaction_id: int,
@@ -103,3 +83,36 @@ def create_transaction(
      db.commit()
      db.refresh(new_transaction)
      return new_transaction
+
+
+@app.get("/categories", response_model=list[CategoryRead])
+def list_categories(db: Session = Depends(get_db)):
+    categories = db.scalars(select(Category)).all()
+    return categories
+
+@app.post("/categories", response_model=CategoryRead, status_code=201)
+def create_category(
+    category_data: CategoryCreate,
+    db: Session = Depends(get_db),
+):
+    new_category = Category(
+        user_id=category_data.user_id,
+        name=category_data.name,
+        kind=category_data.kind,
+    )
+    db.add(new_category)
+    db.commit()
+    db.refresh(new_category)
+    return new_category
+
+@app.get("/categories/{category_id}", response_model=CategoryRead)
+def get_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+):
+    category = db.get(Category, category_id)
+
+    if category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    return category
