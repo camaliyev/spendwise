@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Category, Transaction
-from schemas import CategoryCreate, CategoryRead, TransactionCreate, TransactionRead, TransactionUpdate
+from schemas import CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
 
 app = FastAPI(title="SpendWise API")
 
@@ -115,4 +115,34 @@ def get_category(
     if category is None:
         raise HTTPException(status_code=404, detail="Category not found")
 
+    return category
+
+@app.patch("/categories/{category_id}", response_model=CategoryRead)
+def update_category(
+    category_id: int,
+    category_data: CategoryUpdate,
+    db: Session = Depends(get_db),
+):
+    category = db.get(Category, category_id)
+
+    if category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    update_data = category_data.model_dump(exclude_unset=True)
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields provided")
+
+    for field, value in update_data.items():
+        if value is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{field} cannot be null",
+            )
+
+    for field, value in update_data.items():
+        setattr(category, field, value)
+
+    db.commit()
+    db.refresh(category)
     return category
