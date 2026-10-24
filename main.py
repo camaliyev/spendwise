@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Budget, Category, Transaction
-from schemas import CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
+from schemas import BudgetCreate, BudgetRead, CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
+from sqlalchemy.exc import IntegrityError
 
 app = FastAPI(title="SpendWise API")
 
@@ -179,4 +180,52 @@ def delete_category(
     db.commit()
 
     return {"message": "Category deleted successfully"}
-    
+
+
+@app.get("/budgets", response_model=list[BudgetRead])
+def list_budgets(db: Session = Depends(get_db)):
+    budgets = db.scalars(select(Budget)).all()
+    return budgets
+
+@app.post("/budgets", response_model=BudgetRead, status_code=201)
+def create_budget(
+    budget_data: BudgetCreate,
+    db: Session = Depends(get_db),
+):
+    category = db.get(Category, budget_data.category_id)
+
+    if category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    if category.user_id != budget_data.user_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Category must belong to the budget's user",
+        )
+
+    if category.kind != "expense":
+        raise HTTPException(
+            status_code=422,
+            detail="Budgets require an expense category",
+        )
+
+    new_budget = Budget(
+        user_id=budget_data.user_id,
+        category_id=budget_data.category_id,
+        monthly_limit=budget_data.monthly_limit,
+        month=budget_data.month,
+    )
+
+    db.add(new_budget)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Budget conflicts with existing database records",
+        )
+
+    db.refresh(new_budget)
+    return new_budget

@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class TransactionCreate(BaseModel):
@@ -55,3 +55,26 @@ class CategoryUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=50)
     kind: Literal["income", "expense"] | None = None
+
+
+class BudgetCreate(BaseModel):
+    user_id: int
+    category_id:int
+    monthly_limit: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
+    month: date
+
+    @field_validator("month")
+    @classmethod
+    def validate_month(cls, value: date) -> date:
+        if value.day != 1:
+            raise ValueError("Month must be the first day of the month")
+        return value
+
+class BudgetRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    category_id: int
+    monthly_limit: Decimal
+    month: date
