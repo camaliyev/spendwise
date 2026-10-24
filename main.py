@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import Category, Transaction
+from models import Budget, Category, Transaction
 from schemas import CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
 
 app = FastAPI(title="SpendWise API")
@@ -146,3 +146,37 @@ def update_category(
     db.commit()
     db.refresh(category)
     return category
+
+@app.delete("/categories/{category_id}")
+def delete_category(
+    category_id: int,
+    db: Session = Depends(get_db),
+):
+    category = db.get(Category, category_id)
+
+    if category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    transaction_id =  db.scalar(
+        select(Transaction.id)
+        .where(Transaction.category_id == category_id)
+        .limit(1)
+    )
+
+    budget_id = db.scalar(
+        select(Budget.id)
+        .where(Budget.category_id == category_id)
+        .limit(1)
+    )
+
+    if transaction_id is not None or budget_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Category is used by transactions or budgets",
+        )
+
+    db.delete(category)
+    db.commit()
+
+    return {"message": "Category deleted successfully"}
+    
