@@ -17,8 +17,16 @@ def home():
     return {"message": "Welcome to the SpendWise API"}
 
 @app.get("/transactions", response_model=list[TransactionRead])
-def list_transactions(db: Session = Depends(get_db)):
-    transactions = db.scalars(select(Transaction)).all()
+def list_transactions(
+    category_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    query = select(Transaction)
+
+    if category_id is not None:
+        query = query.where(Transaction.category_id == category_id)
+
+    transactions = db.scalars(query).all()
     return transactions
 
 @app.get("/transactions/{transaction_id}", response_model=TransactionRead)
