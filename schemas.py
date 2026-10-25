@@ -85,3 +85,11 @@ class BudgetUpdate(BaseModel):
         max_digits=10,
         decimal_places=2,
     )
+
+class BudgetSummary(BaseModel):
+    budget_id: int
+    category_id: int
+    month: date
+    monthly_limit: Decimal
+    total_spent: Decimal
+    remaining: Decimal

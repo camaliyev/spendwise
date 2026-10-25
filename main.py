@@ -1,10 +1,13 @@
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from datetime import date
+from decimal import Decimal
+from sqlalchemy import func
 
 from database import get_db
 from models import Budget, Category, Transaction
-from schemas import BudgetCreate, BudgetRead, BudgetUpdate, CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
+from schemas import BudgetCreate, BudgetRead, BudgetSummary, BudgetUpdate, CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
 from sqlalchemy.exc import IntegrityError
 
 app = FastAPI(title="SpendWise API")
@@ -273,3 +276,42 @@ def delete_budget(
     db.commit()
 
     return {"message": "Budget deleted successfully"}
+
+
+@app.get("/budgets/{budget_id}/summary", response_model=BudgetSummary)
+def get_budget_summary(
+    budget_id: int,
+    db: Session = Depends(get_db),
+):
+    budget = db.get(Budget, budget_id)
+
+    if budget is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    start_date = budget.month
+
+    if start_date.month == 12:
+        end_date = date(start_date.year + 1, 1, 1)
+    else:
+        end_date = date(start_date.year, start_date.month + 1, 1)
+
+    total_spent = db.scalar(
+        select(func.sum(Transaction.amount)).where(
+            Transaction.user_id == budget.user_id,
+            Transaction.category_id == budget.category_id,
+            Transaction.transaction_date >= start_date,
+            Transaction.transaction_date < end_date,
+        )
+    )
+
+    if total_spent is None:
+        total_spent = Decimal("0.00")
+
+    return {
+        "budget_id": budget.id,
+        "category_id": budget.category_id,
+        "month": budget.month,
+        "monthly_limit": budget.monthly_limit,
+        "total_spent": total_spent,
+        "remaining": budget.monthly_limit - total_spent,
+    }
