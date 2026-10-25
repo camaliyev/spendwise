@@ -229,3 +229,15 @@ def create_budget(
 
     db.refresh(new_budget)
     return new_budget
+
+@app.get("/budgets/{budget_id}", response_model=BudgetRead)
+def get_budget(
+    budget_id: int,
+    db: Session = Depends(get_db),
+):
+    budget = db.get(Budget, budget_id)
+
+    if budget is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    return budget
