@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from datetime import date
@@ -21,6 +21,8 @@ def list_transactions(
     category_id: int | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
     if start_date is not None and end_date is not None:
@@ -41,6 +43,7 @@ def list_transactions(
     if end_date is not None:
         query = query.where(Transaction.transaction_date <= end_date)
 
+    query = query.order_by(Transaction.id).offset(offset).limit(limit)
     transactions = db.scalars(query).all()
     return transactions
 
