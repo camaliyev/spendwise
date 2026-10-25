@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Budget, Category, Transaction
-from schemas import BudgetCreate, BudgetRead, CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
+from schemas import BudgetCreate, BudgetRead, BudgetUpdate, CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
 from sqlalchemy.exc import IntegrityError
 
 app = FastAPI(title="SpendWise API")
@@ -240,4 +240,21 @@ def get_budget(
     if budget is None:
         raise HTTPException(status_code=404, detail="Budget not found")
 
+    return budget
+
+@app.patch("/budgets/{budget_id}", response_model=BudgetRead)
+def update_budget(
+    budget_id: int,
+    budget_data: BudgetUpdate,
+    db: Session = Depends(get_db),
+):
+    budget = db.get(Budget, budget_id)
+
+    if budget is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    budget.monthly_limit = budget_data.monthly_limit
+
+    db.commit()
+    db.refresh(budget)
     return budget

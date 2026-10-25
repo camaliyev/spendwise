@@ -78,3 +78,10 @@ class BudgetRead(BaseModel):
     category_id: int
     monthly_limit: Decimal
     month: date
+
+class BudgetUpdate(BaseModel):
+    monthly_limit: Decimal = Field(
+        gt=0,
+        max_digits=10,
+        decimal_places=2,
+    )
