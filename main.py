@@ -19,12 +19,27 @@ def home():
 @app.get("/transactions", response_model=list[TransactionRead])
 def list_transactions(
     category_id: int | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     db: Session = Depends(get_db),
 ):
+    if start_date is not None and end_date is not None:
+        if start_date > end_date:
+            raise HTTPException(
+                status_code=422,
+                detail="Start date must not be after end date",
+            )
+
     query = select(Transaction)
 
     if category_id is not None:
         query = query.where(Transaction.category_id == category_id)
+
+    if start_date is not None:
+        query = query.where(Transaction.transaction_date >= start_date)
+
+    if end_date is not None:
+        query = query.where(Transaction.transaction_date <= end_date)
 
     transactions = db.scalars(query).all()
     return transactions
