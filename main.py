@@ -1,5 +1,9 @@
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
+
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -27,6 +31,8 @@ from schemas import (
     UserLogin,
     UserRead,
 )
+
+
 from security import (
     ALGORITHM,
     SECRET_KEY,
@@ -38,6 +44,14 @@ from security import (
 
 app = FastAPI(title="SpendWise API")
 bearer_scheme = HTTPBearer(auto_error=False)
+
+BASE_DIR = Path(__file__).resolve().parent
+
+app.mount(
+    "/static",
+    StaticFiles(directory=BASE_DIR / "static"),
+    name="static",
+)
 
 
 def get_current_user(
@@ -72,9 +86,9 @@ def get_current_user(
     return user
 
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def home():
-    return {"message": "Welcome to the SpendWise API"}
+    return FileResponse(BASE_DIR / "static" / "index.html")
 
 
 # Authentication

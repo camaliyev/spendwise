@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SpendWise</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div id="notice" role="status" aria-live="polite" hidden></div>
+
+  <main id="auth-view" class="auth-layout">
+    <section class="intro">
+      <a class="brand" href="/">SpendWise<span>●</span></a>
+      <p class="eyebrow">A LITTLE CLARITY. EVERY DAY.</p>
+      <h1>Your money.<br>Your next move.</h1>
+      <p class="intro-copy">
+        Track everyday spending, build thoughtful budgets,
+        and make room for what matters.
+      </p>
+      <div class="intro-note">
+        <span>↗</span>
+        Small habits. A clearer picture.
+      </div>
+    </section>
+
+    <section class="auth-card">
+      <p class="eyebrow">YOUR PERSONAL MONEY SPACE</p>
+      <h2 id="auth-title">Welcome back</h2>
+      <p id="auth-subtitle" class="muted">Log in to see your overview.</p>
+
+      <form id="auth-form">
+        <label id="name-field" hidden>
+          Name
+          <input name="name" maxlength="100" autocomplete="name">
+        </label>
+
+        <label>
+          Email
+          <input name="email" type="email" required autocomplete="email">
+        </label>
+
+        <label>
+          Password
+          <input name="password" type="password" required
+                 autocomplete="current-password">
+        </label>
+
+        <p id="password-help" class="muted small" hidden>
+          Use 15–128 characters.
+        </p>
+
+        <button id="auth-submit" class="primary" type="submit">
+          Log in
+        </button>
+      </form>
+
+      <button id="auth-toggle" class="text-button" type="button">
+        New here? Create an account
+      </button>
+    </section>
+  </main>
+
+  <div id="app-view" hidden>
+    <header class="topbar">
+      <a class="brand" href="/">SpendWise<span>●</span></a>
+      <div class="account">
+        <span id="user-name"></span>
+        <button id="logout" class="secondary" type="button">Log out</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="page-heading">
+        <div>
+          <p class="eyebrow">YOUR MONEY, AT A GLANCE</p>
+          <h1>Make every month count.</h1>
+          <p class="muted">A clearer view of where your money goes.</p>
+        </div>
+        <label class="month-picker">
+          Viewing month
+          <input id="view-month" type="month" required>
+        </label>
+      </section>
+
+      <section class="stats" aria-label="Monthly overview">
+        <article class="stat">
+          <p>Income</p>
+          <strong id="income-total">$0.00</strong>
+          <span class="muted small">Money coming in</span>
+        </article>
+        <article class="stat">
+          <p>Expenses</p>
+          <strong id="expense-total">$0.00</strong>
+          <span class="muted small">Money going out</span>
+        </article>
+        <article class="stat accent">
+          <p>Net this month</p>
+          <strong id="net-total">$0.00</strong>
+          <span class="small">Income minus expenses</span>
+        </article>
+      </section>
+
+      <nav class="tabs" aria-label="Sections">
+        <button type="button" data-tab="transactions"
+                class="active" aria-pressed="true">Transactions</button>
+        <button type="button" data-tab="categories"
+                aria-pressed="false">Categories</button>
+        <button type="button" data-tab="budgets"
+                aria-pressed="false">Budgets</button>
+      </nav>
+
+      <section id="transactions-panel" class="panel">
+        <div class="section-heading">
+          <div>
+            <h2>Transactions</h2>
+            <p class="muted">The little things add up.</p>
+          </div>
+          <button class="primary" data-new="transaction" type="button">
+            + Add transaction
+          </button>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="transaction-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="categories-panel" class="panel" hidden>
+        <div class="section-heading">
+          <div>
+            <h2>Categories</h2>
+            <p class="muted">Give every transaction a place.</p>
+          </div>
+          <button class="primary" data-new="category" type="button">
+            + Add category
+          </button>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Type</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="category-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="budgets-panel" class="panel" hidden>
+        <div class="section-heading">
+          <div>
+            <h2>Budgets</h2>
+            <p class="muted">A plan for the month ahead.</p>
+          </div>
+          <button class="primary" data-new="budget" type="button">
+            + Add budget
+          </button>
+        </div>
+        <div id="budget-cards" class="budget-grid"></div>
+      </section>
+    </main>
+    <footer>SpendWise · A little more clarity.</footer>
+  </div>
+
+  <dialog id="editor">
+    <form id="editor-form">
+      <div class="section-heading">
+        <h2 id="editor-title"></h2>
+        <button id="close-editor" class="secondary" type="button">
+          Close
+        </button>
+      </div>
+      <div id="editor-fields"></div>
+      <p id="editor-error" class="form-error" role="alert"></p>
+      <button class="primary" type="submit">Save</button>
+    </form>
+  </dialog>
+</body>
+</html>
