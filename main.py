@@ -1,25 +1,42 @@
-from fastapi import Depends, FastAPI, HTTPException, Query
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 from datetime import date
 from decimal import Decimal
-from sqlalchemy import func
+
+import jwt
+from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt.exceptions import InvalidTokenError
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Budget, Category, Transaction, User
-from schemas import UserLogin, Token, UserCreate, UserRead, BudgetCreate, BudgetRead, BudgetSummary, BudgetUpdate, CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
-from sqlalchemy.exc import IntegrityError
-from security import ALGORITHM, SECRET_KEY, hash_password, verify_password, create_access_token
-import jwt
-from jwt.exceptions import InvalidTokenError
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from schemas import (
+    BudgetCreate,
+    BudgetRead,
+    BudgetSummary,
+    BudgetUpdate,
+    CategoryCreate,
+    CategoryRead,
+    CategoryUpdate,
+    Token,
+    TransactionCreate,
+    TransactionRead,
+    TransactionUpdate,
+    UserCreate,
+    UserLogin,
+    UserRead,
+)
+from security import (
+    ALGORITHM,
+    SECRET_KEY,
+    create_access_token,
+    hash_password,
+    verify_password,
+)
+
 
 app = FastAPI(title="SpendWise API")
-
-@app.get("/")
-def home():
-    return {"message": "Welcome to the SpendWise API"}
-
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -43,7 +60,6 @@ def get_current_user(
             algorithms=[ALGORITHM],
             options={"require": ["sub", "exp"]},
         )
-
         user_id = int(payload["sub"])
     except (InvalidTokenError, ValueError, TypeError):
         raise credentials_error
@@ -54,6 +70,83 @@ def get_current_user(
         raise credentials_error
 
     return user
+
+
+@app.get("/")
+def home():
+    return {"message": "Welcome to the SpendWise API"}
+
+
+# Authentication
+
+
+@app.post("/auth/register", response_model=UserRead, status_code=201)
+def register_user(
+    user_data: UserCreate,
+    db: Session = Depends(get_db),
+):
+    existing_user = db.scalar(
+        select(User).where(User.email == str(user_data.email))
+    )
+
+    if existing_user is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Email is already registered",
+        )
+
+    new_user = User(
+        name=user_data.name,
+        email=str(user_data.email),
+        password_hash=hash_password(user_data.password),
+    )
+
+    db.add(new_user)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Unable to register user with these details",
+        )
+
+    db.refresh(new_user)
+    return new_user
+
+
+@app.post("/auth/login", response_model=Token)
+def login_user(
+    user_data: UserLogin,
+    db: Session = Depends(get_db),
+):
+    user = db.scalar(
+        select(User).where(User.email == str(user_data.email))
+    )
+
+    if user is None or not verify_password(
+        user_data.password,
+        user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return Token(access_token=create_access_token(user.id))
+
+
+@app.get("/auth/me", response_model=UserRead)
+def read_current_user(
+    current_user: User = Depends(get_current_user),
+):
+    return current_user
+
+
+# Transactions
+
 
 @app.get("/transactions", response_model=list[TransactionRead])
 def list_transactions(
@@ -87,8 +180,36 @@ def list_transactions(
 
     query = query.order_by(Transaction.id).offset(offset).limit(limit)
 
-    transactions = db.scalars(query).all()
-    return transactions
+    return db.scalars(query).all()
+
+
+@app.post("/transactions", response_model=TransactionRead, status_code=201)
+def create_transaction(
+    transaction_data: TransactionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    category = db.scalar(
+        select(Category).where(
+            Category.id == transaction_data.category_id,
+            Category.user_id == current_user.id,
+        )
+    )
+
+    if category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    new_transaction = Transaction(
+        user_id=current_user.id,
+        **transaction_data.model_dump(),
+    )
+
+    db.add(new_transaction)
+    db.commit()
+    db.refresh(new_transaction)
+
+    return new_transaction
+
 
 @app.get("/transactions/{transaction_id}", response_model=TransactionRead)
 def get_transaction(
@@ -104,36 +225,10 @@ def get_transaction(
     )
 
     if transaction is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Transaction not found",
-        )
+        raise HTTPException(status_code=404, detail="Transaction not found")
 
     return transaction
 
-@app.delete("/transactions/{transaction_id}")
-def delete_transaction(
-    transaction_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    transaction = db.scalar(
-        select(Transaction).where(
-            Transaction.id == transaction_id,
-            Transaction.user_id == current_user.id,
-        )
-    )
-
-    if transaction is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Transaction not found",
-        )
-
-    db.delete(transaction)
-    db.commit()
-
-    return {"message": "Transaction deleted successfully"}
 
 @app.patch("/transactions/{transaction_id}", response_model=TransactionRead)
 def update_transaction(
@@ -150,10 +245,7 @@ def update_transaction(
     )
 
     if transaction is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Transaction not found",
-        )
+        raise HTTPException(status_code=404, detail="Transaction not found")
 
     update_data = transaction_data.model_dump(exclude_unset=True)
 
@@ -179,46 +271,40 @@ def update_transaction(
         )
 
         if category is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Category not found",
-            )
+            raise HTTPException(status_code=404, detail="Category not found")
 
     for field, value in update_data.items():
         setattr(transaction, field, value)
 
     db.commit()
     db.refresh(transaction)
+
     return transaction
 
-@app.post("/transactions", response_model=TransactionRead, status_code=201)
-def create_transaction(
-    transaction_data: TransactionCreate,
+
+@app.delete("/transactions/{transaction_id}")
+def delete_transaction(
+    transaction_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    category = db.scalar(
-        select(Category).where(
-            Category.id == transaction_data.category_id,
-            Category.user_id == current_user.id,
+    transaction = db.scalar(
+        select(Transaction).where(
+            Transaction.id == transaction_id,
+            Transaction.user_id == current_user.id,
         )
     )
 
-    if category is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Category not found",
-        )
+    if transaction is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
 
-    new_transaction = Transaction(
-        user_id=current_user.id,
-        **transaction_data.model_dump(),
-    )
-
-    db.add(new_transaction)
+    db.delete(transaction)
     db.commit()
-    db.refresh(new_transaction)
-    return new_transaction
+
+    return {"message": "Transaction deleted successfully"}
+
+
+# Categories
 
 
 @app.get("/categories", response_model=list[CategoryRead])
@@ -233,6 +319,7 @@ def list_categories(
     )
 
     return db.scalars(query).all()
+
 
 @app.post("/categories", response_model=CategoryRead, status_code=201)
 def create_category(
@@ -251,17 +338,6 @@ def create_category(
 
     return new_category
 
-@app.get("/categories/{category_id}", response_model=CategoryRead)
-def get_category(
-    category_id: int,
-    db: Session = Depends(get_db),
-):
-    category = db.get(Category, category_id)
-
-    if category is None:
-        raise HTTPException(status_code=404, detail="Category not found")
-
-    return category
 
 @app.get("/categories/{category_id}", response_model=CategoryRead)
 def get_category(
@@ -277,32 +353,97 @@ def get_category(
     )
 
     if category is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Category not found",
-        )
+        raise HTTPException(status_code=404, detail="Category not found")
 
     return category
+
+
+@app.patch("/categories/{category_id}", response_model=CategoryRead)
+def update_category(
+    category_id: int,
+    category_data: CategoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    category = db.scalar(
+        select(Category).where(
+            Category.id == category_id,
+            Category.user_id == current_user.id,
+        )
+    )
+
+    if category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    update_data = category_data.model_dump(exclude_unset=True)
+
+    if not update_data:
+        raise HTTPException(
+            status_code=422,
+            detail="No fields provided for update",
+        )
+
+    for field, value in update_data.items():
+        if value is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{field} cannot be null",
+            )
+
+    if "kind" in update_data and update_data["kind"] != category.kind:
+        transaction_id = db.scalar(
+            select(Transaction.id)
+            .where(Transaction.category_id == category.id)
+            .limit(1)
+        )
+        budget_id = db.scalar(
+            select(Budget.id)
+            .where(Budget.category_id == category.id)
+            .limit(1)
+        )
+
+        if transaction_id is not None or budget_id is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Cannot change kind of a category used by "
+                    "transactions or budgets"
+                ),
+            )
+
+    for field, value in update_data.items():
+        setattr(category, field, value)
+
+    db.commit()
+    db.refresh(category)
+
+    return category
+
 
 @app.delete("/categories/{category_id}")
 def delete_category(
     category_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    category = db.get(Category, category_id)
+    category = db.scalar(
+        select(Category).where(
+            Category.id == category_id,
+            Category.user_id == current_user.id,
+        )
+    )
 
     if category is None:
         raise HTTPException(status_code=404, detail="Category not found")
 
-    transaction_id =  db.scalar(
+    transaction_id = db.scalar(
         select(Transaction.id)
-        .where(Transaction.category_id == category_id)
+        .where(Transaction.category_id == category.id)
         .limit(1)
     )
-
     budget_id = db.scalar(
         select(Budget.id)
-        .where(Budget.category_id == category_id)
+        .where(Budget.category_id == category.id)
         .limit(1)
     )
 
@@ -318,26 +459,38 @@ def delete_category(
     return {"message": "Category deleted successfully"}
 
 
+# Budgets
+
+
 @app.get("/budgets", response_model=list[BudgetRead])
-def list_budgets(db: Session = Depends(get_db)):
-    budgets = db.scalars(select(Budget)).all()
-    return budgets
+def list_budgets(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = (
+        select(Budget)
+        .where(Budget.user_id == current_user.id)
+        .order_by(Budget.id)
+    )
+
+    return db.scalars(query).all()
+
 
 @app.post("/budgets", response_model=BudgetRead, status_code=201)
 def create_budget(
     budget_data: BudgetCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    category = db.get(Category, budget_data.category_id)
+    category = db.scalar(
+        select(Category).where(
+            Category.id == budget_data.category_id,
+            Category.user_id == current_user.id,
+        )
+    )
 
     if category is None:
         raise HTTPException(status_code=404, detail="Category not found")
-
-    if category.user_id != budget_data.user_id:
-        raise HTTPException(
-            status_code=422,
-            detail="Category must belong to the budget's user",
-        )
 
     if category.kind != "expense":
         raise HTTPException(
@@ -346,10 +499,8 @@ def create_budget(
         )
 
     new_budget = Budget(
-        user_id=budget_data.user_id,
-        category_id=budget_data.category_id,
-        monthly_limit=budget_data.monthly_limit,
-        month=budget_data.month,
+        user_id=current_user.id,
+        **budget_data.model_dump(),
     )
 
     db.add(new_budget)
@@ -366,25 +517,39 @@ def create_budget(
     db.refresh(new_budget)
     return new_budget
 
+
 @app.get("/budgets/{budget_id}", response_model=BudgetRead)
 def get_budget(
     budget_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    budget = db.get(Budget, budget_id)
+    budget = db.scalar(
+        select(Budget).where(
+            Budget.id == budget_id,
+            Budget.user_id == current_user.id,
+        )
+    )
 
     if budget is None:
         raise HTTPException(status_code=404, detail="Budget not found")
 
     return budget
 
+
 @app.patch("/budgets/{budget_id}", response_model=BudgetRead)
 def update_budget(
     budget_id: int,
     budget_data: BudgetUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    budget = db.get(Budget, budget_id)
+    budget = db.scalar(
+        select(Budget).where(
+            Budget.id == budget_id,
+            Budget.user_id == current_user.id,
+        )
+    )
 
     if budget is None:
         raise HTTPException(status_code=404, detail="Budget not found")
@@ -393,14 +558,22 @@ def update_budget(
 
     db.commit()
     db.refresh(budget)
+
     return budget
+
 
 @app.delete("/budgets/{budget_id}")
 def delete_budget(
     budget_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    budget = db.get(Budget, budget_id)
+    budget = db.scalar(
+        select(Budget).where(
+            Budget.id == budget_id,
+            Budget.user_id == current_user.id,
+        )
+    )
 
     if budget is None:
         raise HTTPException(status_code=404, detail="Budget not found")
@@ -415,8 +588,14 @@ def delete_budget(
 def get_budget_summary(
     budget_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    budget = db.get(Budget, budget_id)
+    budget = db.scalar(
+        select(Budget).where(
+            Budget.id == budget_id,
+            Budget.user_id == current_user.id,
+        )
+    )
 
     if budget is None:
         raise HTTPException(status_code=404, detail="Budget not found")
@@ -430,7 +609,7 @@ def get_budget_summary(
 
     total_spent = db.scalar(
         select(func.sum(Transaction.amount)).where(
-            Transaction.user_id == budget.user_id,
+            Transaction.user_id == current_user.id,
             Transaction.category_id == budget.category_id,
             Transaction.transaction_date >= start_date,
             Transaction.transaction_date < end_date,
@@ -448,68 +627,3 @@ def get_budget_summary(
         "total_spent": total_spent,
         "remaining": budget.monthly_limit - total_spent,
     }
-
-@app.post("/auth/register", response_model=UserRead, status_code=201)
-def register_user(
-    user_data: UserCreate,
-    db: Session = Depends(get_db),
-):
-    existing_user = db.scalar(
-        select(User).where(User.email == str(user_data.email))
-    )
-
-    if existing_user is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="Email is already registered",
-        )
-
-    new_user = User(
-        name=user_data.name,
-        email=str(user_data.email),
-        password_hash=hash_password(user_data.password),
-    )
-
-    db.add(new_user)
-
-    try:
-        db.commit()
-    except IntegrityError:
-        # Handle a duplicate registration that occurs after the initial check.
-        db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="Unable to register user with these details",
-        )
-
-    db.refresh(new_user)
-    return new_user
-
-@app.post("/auth/login", response_model=Token)
-def login_user(
-    user_data: UserLogin,
-    db: Session = Depends(get_db),
-):
-    user = db.scalar(
-        select(User).where(User.email == str(user_data.email))
-    )
-
-    if user is None or not verify_password(
-        user_data.password,
-        user.password_hash,
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    access_token = create_access_token(user.id)
-
-    return Token(access_token=access_token)
-
-@app.get("/auth/me", response_model=UserRead)
-def read_current_user(
-    current_user: User = Depends(get_current_user)
-):
-    return current_user
