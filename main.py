@@ -238,15 +238,17 @@ def list_categories(
 def create_category(
     category_data: CategoryCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     new_category = Category(
-        user_id=category_data.user_id,
-        name=category_data.name,
-        kind=category_data.kind,
+        user_id=current_user.id,
+        **category_data.model_dump(),
     )
+
     db.add(new_category)
     db.commit()
     db.refresh(new_category)
+
     return new_category
 
 @app.get("/categories/{category_id}", response_model=CategoryRead)

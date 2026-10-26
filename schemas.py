@@ -45,7 +45,7 @@ class CategoryCreate(BaseModel):
     # Strip whitespace before length validation to reject blank names.
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    user_id: int
+    
     name: str = Field(min_length=1, max_length=50)
     kind: Literal["income", "expense"]
 
