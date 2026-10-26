@@ -175,26 +175,30 @@ def update_transaction(
     return transaction
 
 
-@app.post("/transactions", response_model=TransactionRead)
+@app.post("/transactions", response_model=TransactionRead, status_code=201)
 def create_transaction(
     transaction_data: TransactionCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    user = db.get(User, transaction_data.user_id)
-
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    category = db.get(Category, transaction_data.category_id)
+    category = db.scalar(
+        select(Category).where(
+            Category.id == transaction_data.category_id,
+            Category.user_id == current_user.id,
+        )
+    )
 
     if category is None:
-        raise HTTPException(status_code=404, detail="Category not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Category not found",
+        )
 
-    if category.user_id != transaction_data.user_id:
-        raise HTTPException(status_code=422, detail="Category must belong to the transaction's user")
-    
-    
-    new_transaction = Transaction(**transaction_data.model_dump())
+    new_transaction = Transaction(
+        user_id=current_user.id,
+        **transaction_data.model_dump(),
+    )
+
     db.add(new_transaction)
     db.commit()
     db.refresh(new_transaction)

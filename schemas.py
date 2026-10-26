@@ -6,7 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, EmailStr
 from datetime import datetime
 
 class TransactionCreate(BaseModel):
-    user_id: int
     category_id: int
     amount: Decimal = Field(gt=0)
     description: str | None = None
