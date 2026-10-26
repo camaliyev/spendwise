@@ -2,6 +2,10 @@
 
 A personal finance application built with FastAPI, SQLAlchemy, and vanilla JavaScript. Users can track income and expenses, organize transactions into categories, and monitor monthly budgets.
 
+## Preview
+
+![SpendWise dashboard](screenshots/dashboard.png)
+
 ## Features
 
 - User registration and login
