@@ -261,34 +261,25 @@ def get_category(
 
     return category
 
-@app.patch("/categories/{category_id}", response_model=CategoryRead)
-def update_category(
+@app.get("/categories/{category_id}", response_model=CategoryRead)
+def get_category(
     category_id: int,
-    category_data: CategoryUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    category = db.get(Category, category_id)
+    category = db.scalar(
+        select(Category).where(
+            Category.id == category_id,
+            Category.user_id == current_user.id,
+        )
+    )
 
     if category is None:
-        raise HTTPException(status_code=404, detail="Category not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Category not found",
+        )
 
-    update_data = category_data.model_dump(exclude_unset=True)
-
-    if not update_data:
-        raise HTTPException(status_code=400, detail="No fields provided")
-
-    for field, value in update_data.items():
-        if value is None:
-            raise HTTPException(
-                status_code=422,
-                detail=f"{field} cannot be null",
-            )
-
-    for field, value in update_data.items():
-        setattr(category, field, value)
-
-    db.commit()
-    db.refresh(category)
     return category
 
 @app.delete("/categories/{category_id}")
