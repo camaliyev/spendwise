@@ -63,6 +63,7 @@ def list_transactions(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if start_date is not None and end_date is not None:
         if start_date > end_date:
@@ -71,7 +72,9 @@ def list_transactions(
                 detail="Start date must not be after end date",
             )
 
-    query = select(Transaction)
+    query = select(Transaction).where(
+        Transaction.user_id == current_user.id
+    )
 
     if category_id is not None:
         query = query.where(Transaction.category_id == category_id)
@@ -83,6 +86,7 @@ def list_transactions(
         query = query.where(Transaction.transaction_date <= end_date)
 
     query = query.order_by(Transaction.id).offset(offset).limit(limit)
+
     transactions = db.scalars(query).all()
     return transactions
 
