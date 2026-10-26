@@ -135,7 +135,7 @@ def delete_transaction(
 
     return {"message": "Transaction deleted successfully"}
 
-@@app.patch("/transactions/{transaction_id}", response_model=TransactionRead)
+@app.patch("/transactions/{transaction_id}", response_model=TransactionRead)
 def update_transaction(
     transaction_id: int,
     transaction_data: TransactionUpdate,
@@ -222,9 +222,17 @@ def create_transaction(
 
 
 @app.get("/categories", response_model=list[CategoryRead])
-def list_categories(db: Session = Depends(get_db)):
-    categories = db.scalars(select(Category)).all()
-    return categories
+def list_categories(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = (
+        select(Category)
+        .where(Category.user_id == current_user.id)
+        .order_by(Category.id)
+    )
+
+    return db.scalars(query).all()
 
 @app.post("/categories", response_model=CategoryRead, status_code=201)
 def create_category(
