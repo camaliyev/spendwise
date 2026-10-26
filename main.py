@@ -90,6 +90,26 @@ def update_transaction(
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields provided")
 
+    if "category_id" in update_data:
+        category_id = update_data["category_id"]
+
+        if category_id is None:
+            raise HTTPException(
+                status_code=422,
+                detail="category_id cannot be null",
+            )
+
+        category = db.get(Category, category_id)
+
+        if category is None:
+            raise HTTPException(status_code=404, detail="Category not found")
+
+        if category.user_id != transaction.user_id:
+            raise HTTPException(
+                status_code=422,
+                detail="Category must belong to the transaction's user",
+        )
+
     for field, value in update_data.items():
         if value is None and field != "description":
             raise HTTPException(
