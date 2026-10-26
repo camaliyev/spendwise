@@ -9,13 +9,51 @@ from database import get_db
 from models import Budget, Category, Transaction, User
 from schemas import UserLogin, Token, UserCreate, UserRead, BudgetCreate, BudgetRead, BudgetSummary, BudgetUpdate, CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
 from sqlalchemy.exc import IntegrityError
-from security import hash_password, verify_password, create_access_token
+from security import ALGORITHM, SECRET_KEY, hash_password, verify_password, create_access_token
+import jwt
+from jwt.exceptions import InvalidTokenError
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 app = FastAPI(title="SpendWise API")
 
 @app.get("/")
 def home():
     return {"message": "Welcome to the SpendWise API"}
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    credentials_error = HTTPException(
+        status_code=401,
+        detail="Invalid or expired authentication token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    if credentials is None:
+        raise credentials_error
+
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={"require": ["sub", "exp"]},
+        )
+
+        user_id = int(payload["sub"])
+    except (InvalidTokenError, ValueError, TypeError):
+        raise credentials_error
+
+    user = db.get(User, user_id)
+
+    if user is None:
+        raise credentials_error
+
+    return user
 
 @app.get("/transactions", response_model=list[TransactionRead])
 def list_transactions(
@@ -435,3 +473,9 @@ def login_user(
     access_token = create_access_token(user.id)
 
     return Token(access_token=access_token)
+
+@app.get("/auth/me", response_model=UserRead)
+def read_current_user(
+    current_user: User = Depends(get_current_user)
+):
+    return current_user
