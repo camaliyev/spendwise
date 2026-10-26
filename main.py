@@ -7,8 +7,9 @@ from sqlalchemy import func
 
 from database import get_db
 from models import Budget, Category, Transaction, User
-from schemas import BudgetCreate, BudgetRead, BudgetSummary, BudgetUpdate, CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
+from schemas import UserCreate, UserRead, BudgetCreate, BudgetRead, BudgetSummary, BudgetUpdate, CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
 from sqlalchemy.exc import IntegrityError
+from security import hash_password
 
 app = FastAPI(title="SpendWise API")
 
@@ -375,3 +376,39 @@ def get_budget_summary(
         "total_spent": total_spent,
         "remaining": budget.monthly_limit - total_spent,
     }
+
+@app.post("/auth/register", response_model=UserRead, status_code=201)
+def register_user(
+    user_data: UserCreate,
+    db: Session = Depends(get_db),
+):
+    existing_user = db.scalar(
+        select(User).where(User.email == str(user_data.email))
+    )
+
+    if existing_user is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Email is already registered",
+        )
+
+    new_user = User(
+        name=user_data.name,
+        email=str(user_data.email),
+        password_hash=hash_password(user_data.password),
+    )
+
+    db.add(new_user)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        # Handle a duplicate registration that occurs after the initial check.
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Unable to register user with these details",
+        )
+
+    db.refresh(new_user)
+    return new_user

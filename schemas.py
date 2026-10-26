@@ -2,8 +2,8 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
+from pydantic import BaseModel, ConfigDict, Field, field_validator, EmailStr
+from datetime import datetime
 
 class TransactionCreate(BaseModel):
     user_id: int
@@ -93,3 +93,18 @@ class BudgetSummary(BaseModel):
     monthly_limit: Decimal
     total_spent: Decimal
     remaining: Decimal
+
+
+class UserCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    password: str = Field(min_length=15, max_length=128)
+
+
+class UserRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: EmailStr
+    created_at: datetime
