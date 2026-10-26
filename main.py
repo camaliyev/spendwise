@@ -126,40 +126,32 @@ def delete_transaction(
 
     return {"message": "Transaction deleted successfully"}
 
-@app.patch("/transactions/{transaction_id}", response_model=TransactionRead)
+@@app.patch("/transactions/{transaction_id}", response_model=TransactionRead)
 def update_transaction(
     transaction_id: int,
     transaction_data: TransactionUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    transaction = db.get(Transaction, transaction_id)
+    transaction = db.scalar(
+        select(Transaction).where(
+            Transaction.id == transaction_id,
+            Transaction.user_id == current_user.id,
+        )
+    )
 
     if transaction is None:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Transaction not found",
+        )
 
     update_data = transaction_data.model_dump(exclude_unset=True)
 
     if not update_data:
-        raise HTTPException(status_code=400, detail="No fields provided")
-
-    if "category_id" in update_data:
-        category_id = update_data["category_id"]
-
-        if category_id is None:
-            raise HTTPException(
-                status_code=422,
-                detail="category_id cannot be null",
-            )
-
-        category = db.get(Category, category_id)
-
-        if category is None:
-            raise HTTPException(status_code=404, detail="Category not found")
-
-        if category.user_id != transaction.user_id:
-            raise HTTPException(
-                status_code=422,
-                detail="Category must belong to the transaction's user",
+        raise HTTPException(
+            status_code=422,
+            detail="No fields provided for update",
         )
 
     for field, value in update_data.items():
@@ -168,12 +160,27 @@ def update_transaction(
                 status_code=422,
                 detail=f"{field} cannot be null",
             )
+
+    if "category_id" in update_data:
+        category = db.scalar(
+            select(Category).where(
+                Category.id == update_data["category_id"],
+                Category.user_id == current_user.id,
+            )
+        )
+
+        if category is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Category not found",
+            )
+
+    for field, value in update_data.items():
         setattr(transaction, field, value)
 
     db.commit()
     db.refresh(transaction)
     return transaction
-
 
 @app.post("/transactions", response_model=TransactionRead, status_code=201)
 def create_transaction(
