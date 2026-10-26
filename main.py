@@ -7,9 +7,9 @@ from sqlalchemy import func
 
 from database import get_db
 from models import Budget, Category, Transaction, User
-from schemas import UserCreate, UserRead, BudgetCreate, BudgetRead, BudgetSummary, BudgetUpdate, CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
+from schemas import UserLogin, Token, UserCreate, UserRead, BudgetCreate, BudgetRead, BudgetSummary, BudgetUpdate, CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
 from sqlalchemy.exc import IntegrityError
-from security import hash_password
+from security import hash_password, verify_password, create_access_token
 
 app = FastAPI(title="SpendWise API")
 
@@ -412,3 +412,26 @@ def register_user(
 
     db.refresh(new_user)
     return new_user
+
+@app.post("/auth/login", response_model=Token)
+def login_user(
+    user_data: UserLogin,
+    db: Session = Depends(get_db),
+):
+    user = db.scalar(
+        select(User).where(User.email == str(user_data.email))
+    )
+
+    if user is None or not verify_password(
+        user_data.password,
+        user.password_hash,
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    access_token = create_access_token(user.id)
+
+    return Token(access_token=access_token)
