@@ -94,11 +94,20 @@ def list_transactions(
 def get_transaction(
     transaction_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    transaction = db.get(Transaction, transaction_id)
+    transaction = db.scalar(
+        select(Transaction).where(
+            Transaction.id == transaction_id,
+            Transaction.user_id == current_user.id,
+        )
+    )
 
     if transaction is None:
-        raise HTTPException(status_code=404, detail="Transaction not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Transaction not found",
+        )
 
     return transaction
 
