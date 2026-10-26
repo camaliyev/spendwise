@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import func
 
 from database import get_db
-from models import Budget, Category, Transaction
+from models import Budget, Category, Transaction, User
 from schemas import BudgetCreate, BudgetRead, BudgetSummary, BudgetUpdate, CategoryCreate, CategoryRead, CategoryUpdate, TransactionCreate, TransactionRead, TransactionUpdate
 from sqlalchemy.exc import IntegrityError
 
@@ -108,11 +108,25 @@ def create_transaction(
     transaction_data: TransactionCreate,
     db: Session = Depends(get_db)
 ):
-     new_transaction = Transaction(**transaction_data.model_dump())
-     db.add(new_transaction)
-     db.commit()
-     db.refresh(new_transaction)
-     return new_transaction
+    user = db.get(User, transaction_data.user_id)
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    category = db.get(Category, transaction_data.category_id)
+
+    if category is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    if category.user_id != transaction_data.user_id:
+        raise HTTPException(status_code=422, detail="Category must belong to the transaction's user")
+    
+    
+    new_transaction = Transaction(**transaction_data.model_dump())
+    db.add(new_transaction)
+    db.commit()
+    db.refresh(new_transaction)
+    return new_transaction
 
 
 @app.get("/categories", response_model=list[CategoryRead])
